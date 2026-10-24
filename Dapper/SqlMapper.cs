@@ -2668,6 +2668,27 @@ namespace Dapper
                 props = FilterParameters(props, identity.Sql);
             }
 
+            // Expand longer list-parameter names first. Otherwise a generated
+            // name such as @values11 can be mistaken for the original @values11
+            // placeholder when @values1 was expanded first.
+#pragma warning disable 618
+            var orderedProps = props.ToList();
+            var listProps = orderedProps
+                .Where(p => LookupDbType(p.PropertyType, p.Name, true, out _) == DynamicParameters.EnumerableMultiParameter)
+                .OrderByDescending(p => p.Name.Length)
+                .ThenBy(p => p.Name, StringComparer.Ordinal)
+                .ToList();
+            var listIndex = 0;
+            for (var i = 0; i < orderedProps.Count; i++)
+            {
+                if (LookupDbType(orderedProps[i].PropertyType, orderedProps[i].Name, true, out _) == DynamicParameters.EnumerableMultiParameter)
+                {
+                    orderedProps[i] = listProps[listIndex++];
+                }
+            }
+            props = orderedProps;
+#pragma warning restore 618
+
             var callOpCode = isStruct ? OpCodes.Call : OpCodes.Callvirt;
             foreach (var prop in props)
             {
