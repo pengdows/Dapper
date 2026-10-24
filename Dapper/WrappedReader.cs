@@ -205,6 +205,7 @@ namespace Dapper
 
         public override async ValueTask DisposeAsync()
         {
+            var cmd = _cmd;
             try
             {
                 await _reader.DisposeAsync().ConfigureAwait(false);
@@ -212,8 +213,16 @@ namespace Dapper
             finally
             {
                 _reader = DisposedReader.Instance;
-                _cmd?.Dispose();
                 _cmd = null!;
+                // the command may support async disposal even though it is held as IDbCommand
+                if (cmd is DbCommand typed)
+                {
+                    await typed.DisposeAsync().ConfigureAwait(false);
+                }
+                else
+                {
+                    cmd?.Dispose();
+                }
             }
         }
 
