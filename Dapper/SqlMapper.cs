@@ -168,7 +168,8 @@ namespace Dapper
                    select Tuple.Create(pair.Key, pair.Value);
         }
 
-        private static Dictionary<Type, TypeMapEntry> typeMap;
+        // replaced wholesale (never mutated) under typeMapSyncLock; volatile so readers always observe the latest published snapshot
+        private static volatile Dictionary<Type, TypeMapEntry> typeMap;
         private static readonly object typeMapSyncLock = new();
 
         [Flags]
