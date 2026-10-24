@@ -37,6 +37,10 @@ namespace Dapper
                 this.state = state;
                 this.addToCache = addToCache;
                 cancel = cancellationToken;
+                if (reader.FieldCount == 0)
+                {
+                    _resultIndexAndConsumedFlag = CONSUMED_FLAG;
+                }
             }
 
             internal GridReader(IDbCommand command, DbDataReader reader, Identity identity, IParameterCallbacks? callbacks, bool addToCache,
