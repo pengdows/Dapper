@@ -15,6 +15,7 @@ public sealed class FakeDbIssue2086Tests
         var oldSetting = SqlMapper.Settings.ApplyNullValues;
         SqlMapper.Settings.ApplyNullValues = true;
         SqlMapper.ResetTypeHandlers();
+        SqlMapper.PurgeQueryCache(); // deserializers bake in ApplyNullValues
         SqlMapper.AddTypeHandler(new SettableStringHandler());
         try
         {
@@ -34,6 +35,38 @@ public sealed class FakeDbIssue2086Tests
         {
             SqlMapper.Settings.ApplyNullValues = oldSetting;
             SqlMapper.ResetTypeHandlers();
+            SqlMapper.PurgeQueryCache();
+        }
+    }
+
+    [Fact]
+    public void DefaultSettingDoesNotPassDbNullToHandler()
+    {
+        var oldSetting = SqlMapper.Settings.ApplyNullValues;
+        SqlMapper.Settings.ApplyNullValues = false;
+        SqlMapper.ResetTypeHandlers();
+        SqlMapper.PurgeQueryCache(); // deserializers bake in ApplyNullValues
+        var handler = new SettableStringHandler();
+        SqlMapper.AddTypeHandler(handler);
+        try
+        {
+            using var connection = new fakeDbConnection(new FakeDataStore());
+            connection.EnqueueReaderResult(new[]
+            {
+                new Dictionary<string, object?> { ["MiddleName"] = DBNull.Value },
+            });
+            connection.Open();
+
+            var result = connection.QuerySingle<Person>("select MiddleName");
+
+            Assert.False(result.MiddleName.IsAssigned);
+            Assert.Equal(0, handler.ParseCalls);
+        }
+        finally
+        {
+            SqlMapper.Settings.ApplyNullValues = oldSetting;
+            SqlMapper.ResetTypeHandlers();
+            SqlMapper.PurgeQueryCache();
         }
     }
 
@@ -50,7 +83,13 @@ public sealed class FakeDbIssue2086Tests
 
     private sealed class SettableStringHandler : SqlMapper.TypeHandler<Settable<string?>>
     {
-        public override Settable<string?> Parse(object value) => new() { IsAssigned = true, Value = value is DBNull ? null : (string)value };
+        public int ParseCalls { get; private set; }
+
+        public override Settable<string?> Parse(object value)
+        {
+            ParseCalls++;
+            return new() { IsAssigned = true, Value = value is DBNull ? null : (string)value };
+        }
 
         public override void SetValue(IDbDataParameter parameter, Settable<string?> value) => parameter.Value = value.Value;
     }
